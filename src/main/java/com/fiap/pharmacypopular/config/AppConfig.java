@@ -4,9 +4,15 @@ import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
 import com.fiap.pharmacypopular.adapter.blob.AzureBlobStorageAdapter;
+import com.fiap.pharmacypopular.adapter.db.PharmacyRepositoryAdapter;
 import com.fiap.pharmacypopular.aplication.IngestStockFilesUseCase;
 import com.fiap.pharmacypopular.aplication.service.FileStockValidator;
 import com.fiap.pharmacypopular.domain.port.BlobStoragePort;
+import com.fiap.pharmacypopular.domain.port.PharmacyRepositoryPort;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+
+import javax.sql.DataSource;
 
 public class AppConfig {
     private AppConfig() {}
@@ -17,6 +23,15 @@ public class AppConfig {
 
     private static final class Holder {
         private static final IngestStockFilesUseCase USE_CASE = buildUseCase();
+    }
+
+    private static DataSource buildDataSource() {
+        HikariConfig cfg = new HikariConfig();
+        cfg.setJdbcUrl(env("DB_URL"));
+        cfg.setUsername(env("DB_USER"));
+        cfg.setPassword(env("DB_PASSWORD"));
+        cfg.setMaximumPoolSize(3);
+        return new HikariDataSource(cfg);
     }
 
     private static IngestStockFilesUseCase buildUseCase() {
@@ -34,8 +49,10 @@ public class AppConfig {
         BlobContainerClient container = serviceClient.getBlobContainerClient(containerName);
         BlobStoragePort blobPort = new AzureBlobStorageAdapter(container, inboxPrefix, processedPrefix, errorPrefix);
         FileStockValidator validator = new FileStockValidator();
+        DataSource ds = buildDataSource();
+        PharmacyRepositoryPort pharmacyRepo = new PharmacyRepositoryAdapter(ds);
 
-        return new IngestStockFilesUseCase(blobPort, minAgeMinutes, validator);
+        return new IngestStockFilesUseCase(blobPort, minAgeMinutes, validator, pharmacyRepo);
     }
 
     private static String env(String key) {

@@ -3,6 +3,7 @@ package com.fiap.pharmacypopular.aplication;
 import com.fiap.pharmacypopular.adapter.exception.DestinationAlreadyExistsException;
 import com.fiap.pharmacypopular.aplication.service.FileStockValidator;
 import com.fiap.pharmacypopular.domain.port.BlobStoragePort;
+import com.fiap.pharmacypopular.domain.port.PharmacyRepositoryPort;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -15,13 +16,16 @@ public class IngestStockFilesUseCase {
     private final BlobStoragePort blobPort;
     private final int minAgeMinutes;
     private final FileStockValidator validator;
+    private final PharmacyRepositoryPort pharmacyRepo;
 
     private static final Logger LOGGER = Logger.getLogger("IngestStockFilesUseCase");
 
-    public IngestStockFilesUseCase(BlobStoragePort blobPort, int minAgeMinutes, FileStockValidator validator) {
+    public IngestStockFilesUseCase(BlobStoragePort blobPort, int minAgeMinutes, FileStockValidator validator,
+                                   PharmacyRepositoryPort pharmacyRepo) {
         this.blobPort = blobPort;
         this.minAgeMinutes = minAgeMinutes;
         this.validator = validator;
+        this.pharmacyRepo = pharmacyRepo;
     }
 
     public BatchRunResult execute() {
@@ -37,6 +41,19 @@ public class IngestStockFilesUseCase {
         int duplicates = 0;
 
         for (BlobStoragePort.BlobRef b : blobs) {
+            String cnpj = extractCnpjFromBlobPath(b.name());
+
+            if (!pharmacyRepo.existsByCnpj(cnpj)) {
+                failed++;
+                LOGGER.severe("Pharmacy CNPJ not found in database: " + cnpj + " blob=" + b.name());
+                try {
+                    blobPort.moveToError(b.name());
+                } catch (Exception moveErr) {
+                    LOGGER.severe("Failed moving blob to error/: blob=" + b.name() + " error=" + moveErr.getMessage());
+                }
+                continue;
+            }
+
             try {
                 byte[] bytes = blobPort.download(b.name());
                 validator.validate(bytes, b.name());
@@ -56,6 +73,14 @@ public class IngestStockFilesUseCase {
             }
         }
         return new BatchRunResult(blobs.size(), processed, failed, duplicates);
+    }
+
+    private String extractCnpjFromBlobPath(String blobPath) {
+        String[] parts = blobPath.split("/");
+        if (parts.length < 3 || !"inbox".equals(parts[0])) {
+            throw new IllegalArgumentException("Invalid blob path pattern: " + blobPath);
+        }
+        return parts[1];
     }
 }
 
