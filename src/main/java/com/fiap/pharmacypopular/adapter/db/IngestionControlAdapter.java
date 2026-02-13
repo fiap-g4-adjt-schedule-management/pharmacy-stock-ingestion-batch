@@ -46,7 +46,7 @@ public class IngestionControlAdapter implements IngestionControlRepositoryPort {
     }
 
     @Override
-    public Optional<Long> tryStartProcessing(String blobPath, String etag, String fileName, String cnpj, LocalDate referenceDate) {
+    public Optional<Long> startProcessing(String blobPath, String etag, String fileName, String cnpj, LocalDate referenceDate) {
         final String sql = "INSERT INTO file_ingestion_control (blob_path, etag, file_name, cnpj, reference_date, status, received_at) " +
                 "VALUES (?, ?, ?, ?, ?, 'PROCESSING', now()) ON CONFLICT (blob_path, etag) DO NOTHING RETURNING id";
 
