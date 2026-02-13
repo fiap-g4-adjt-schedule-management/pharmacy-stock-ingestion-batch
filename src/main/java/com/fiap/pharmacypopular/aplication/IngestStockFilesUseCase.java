@@ -129,7 +129,7 @@ public class IngestStockFilesUseCase {
         try {
             blobPort.moveToError(blobPath);
         } catch (Exception ex) {
-            LOGGER.severe("Failed moving blob to error/: blob=" + blobPath + " error=" + ex.getMessage());
+            LOGGER.severe("Failed moving blob to error/: blob=" + blobPath + " " + ex.getMessage());
         }
     }
 
