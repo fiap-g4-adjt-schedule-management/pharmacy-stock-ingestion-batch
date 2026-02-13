@@ -4,10 +4,12 @@ import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
 import com.fiap.pharmacypopular.adapter.blob.AzureBlobStorageAdapter;
+import com.fiap.pharmacypopular.adapter.db.IngestionControlAdapter;
 import com.fiap.pharmacypopular.adapter.db.PharmacyRepositoryAdapter;
 import com.fiap.pharmacypopular.aplication.IngestStockFilesUseCase;
 import com.fiap.pharmacypopular.aplication.service.FileStockValidator;
 import com.fiap.pharmacypopular.domain.port.BlobStoragePort;
+import com.fiap.pharmacypopular.domain.port.IngestionControlRepositoryPort;
 import com.fiap.pharmacypopular.domain.port.PharmacyRepositoryPort;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -51,8 +53,10 @@ public class AppConfig {
         FileStockValidator validator = new FileStockValidator();
         DataSource ds = buildDataSource();
         PharmacyRepositoryPort pharmacyRepo = new PharmacyRepositoryAdapter(ds);
+        IngestionControlRepositoryPort ingestionRepo = new IngestionControlAdapter(ds);
 
-        return new IngestStockFilesUseCase(blobPort, minAgeMinutes, validator, pharmacyRepo);
+
+        return new IngestStockFilesUseCase(blobPort, minAgeMinutes, validator, pharmacyRepo, ingestionRepo);
     }
 
     private static String env(String key) {
