@@ -7,7 +7,7 @@ import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 
-public class FileStockValidator {
+public class FileStockValidatorService {
 
     private static final List<String> EXPECTED_HEADER =
             List.of("cnpj", "medicine_name", "quantity", "reference_date");

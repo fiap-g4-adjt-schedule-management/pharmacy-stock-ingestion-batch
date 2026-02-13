@@ -1,7 +1,12 @@
 package com.fiap.pharmacypopular.aplication;
 
 import com.fiap.pharmacypopular.adapter.exception.DestinationAlreadyExistsException;
-import com.fiap.pharmacypopular.aplication.service.FileStockValidator;
+import com.fiap.pharmacypopular.aplication.model.StockFileModel;
+import com.fiap.pharmacypopular.aplication.model.StockModel;
+import com.fiap.pharmacypopular.aplication.service.FileStockValidatorService;
+import com.fiap.pharmacypopular.aplication.service.StockFileParserService;
+import com.fiap.pharmacypopular.aplication.service.StockMedicationCodeService;
+import com.fiap.pharmacypopular.aplication.service.StockProcessorStatusService;
 import com.fiap.pharmacypopular.domain.port.BlobStoragePort;
 import com.fiap.pharmacypopular.domain.port.IngestionControlRepositoryPort;
 import com.fiap.pharmacypopular.domain.port.PharmacyRepositoryPort;
@@ -22,17 +27,26 @@ public class IngestStockFilesUseCase {
 
     private final BlobStoragePort blobPort;
     private final int minAgeMinutes;
-    private final FileStockValidator validator;
+    private final FileStockValidatorService validator;
     private final PharmacyRepositoryPort pharmacyRepo;
     private final IngestionControlRepositoryPort ingestionRepo;
+    private final StockFileParserService csvParser;
+    private final StockProcessorStatusService rowsProcessor;
+    private final StockMedicationCodeService rowsMedicationCodeResolver;
 
-    public IngestStockFilesUseCase(BlobStoragePort blobPort, int minAgeMinutes, FileStockValidator validator,
-                                   PharmacyRepositoryPort pharmacyRepo, IngestionControlRepositoryPort ingestionRepo) {
+    public IngestStockFilesUseCase(BlobStoragePort blobPort, int minAgeMinutes, FileStockValidatorService validator,
+                                   PharmacyRepositoryPort pharmacyRepo, IngestionControlRepositoryPort ingestionRepo,
+                                   StockFileParserService csvParser, StockProcessorStatusService rowsProcessor,
+                                   StockMedicationCodeService rowsMedicationCodeResolver
+    ) {
         this.blobPort = blobPort;
         this.minAgeMinutes = minAgeMinutes;
         this.validator = validator;
         this.pharmacyRepo = pharmacyRepo;
         this.ingestionRepo = ingestionRepo;
+        this.csvParser = csvParser;
+        this.rowsProcessor = rowsProcessor;
+        this.rowsMedicationCodeResolver = rowsMedicationCodeResolver;
     }
 
     public BatchRunResult execute() {
@@ -73,6 +87,11 @@ public class IngestStockFilesUseCase {
                 }
                 byte[] bytes = blobPort.download(ctx.blobPath());
                 validator.validate(bytes, ctx.fileName());
+
+                List<StockFileModel> rows = csvParser.parse(bytes, ctx.fileName(), ctx.cnpj(), ctx.referenceDate());
+                List<StockModel> rowsWithCode = rowsMedicationCodeResolver.process(rows);
+                List<StockModel> rowsWithStatus = rowsProcessor.process(rowsWithCode);
+
 
                 succeed(ingestionId, ctx.blobPath());
                 processed++;
@@ -137,7 +156,7 @@ public class IngestStockFilesUseCase {
         try {
             blobPort.moveToProcessed(blobPath);
         } catch (Exception ex) {
-            LOGGER.severe("Failed moving blob to processed/: blob=" + blobPath + " error=" + ex.getMessage());
+            LOGGER.severe("Failed moving blob to processed/: blob=" + blobPath + " " + ex.getMessage());
         }
     }
 
@@ -168,7 +187,7 @@ public class IngestStockFilesUseCase {
     }
 
     private void fail(Long ingestionId, String blobPath, String reason) {
-        LOGGER.severe("Failed processing blob=" + blobPath + " error=" + reason);
+        LOGGER.severe("Failed processing blob=" + blobPath + " reason=" + reason);
 
         if (ingestionId != null) {
             try {
