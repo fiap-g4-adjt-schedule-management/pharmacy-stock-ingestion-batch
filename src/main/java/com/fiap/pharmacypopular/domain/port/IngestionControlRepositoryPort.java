@@ -9,7 +9,7 @@ public interface IngestionControlRepositoryPort {
 
     Optional<IngestionControlModel> findByBlobPathAndEtag(String blobPath, String etag);
 
-    Optional<Long> tryStartProcessing(
+    Optional<Long> startProcessing(
             String blobPath,
             String etag,
             String fileName,

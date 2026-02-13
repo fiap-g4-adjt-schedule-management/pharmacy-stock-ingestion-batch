@@ -7,9 +7,11 @@ import com.fiap.pharmacypopular.aplication.service.FileStockValidatorService;
 import com.fiap.pharmacypopular.aplication.service.StockFileParserService;
 import com.fiap.pharmacypopular.aplication.service.StockMedicationCodeService;
 import com.fiap.pharmacypopular.aplication.service.StockProcessorStatusService;
+import com.fiap.pharmacypopular.domain.model.StockEntry;
 import com.fiap.pharmacypopular.domain.port.BlobStoragePort;
 import com.fiap.pharmacypopular.domain.port.IngestionControlRepositoryPort;
 import com.fiap.pharmacypopular.domain.port.PharmacyRepositoryPort;
+import com.fiap.pharmacypopular.domain.port.StockRepositoryPort;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -33,11 +35,12 @@ public class IngestStockFilesUseCase {
     private final StockFileParserService csvParser;
     private final StockProcessorStatusService rowsProcessor;
     private final StockMedicationCodeService rowsMedicationCodeResolver;
+    private final StockRepositoryPort stockRepo;
 
     public IngestStockFilesUseCase(BlobStoragePort blobPort, int minAgeMinutes, FileStockValidatorService validator,
                                    PharmacyRepositoryPort pharmacyRepo, IngestionControlRepositoryPort ingestionRepo,
                                    StockFileParserService csvParser, StockProcessorStatusService rowsProcessor,
-                                   StockMedicationCodeService rowsMedicationCodeResolver
+                                   StockMedicationCodeService rowsMedicationCodeResolver, StockRepositoryPort stockRepo
     ) {
         this.blobPort = blobPort;
         this.minAgeMinutes = minAgeMinutes;
@@ -47,6 +50,7 @@ public class IngestStockFilesUseCase {
         this.csvParser = csvParser;
         this.rowsProcessor = rowsProcessor;
         this.rowsMedicationCodeResolver = rowsMedicationCodeResolver;
+        this.stockRepo = stockRepo;
     }
 
     public BatchRunResult execute() {
@@ -71,7 +75,7 @@ public class IngestStockFilesUseCase {
                     continue;
                 }
 
-                ingestionId = ingestionRepo.tryStartProcessing(
+                ingestionId = ingestionRepo.startProcessing(
                         ctx.blobPath(), ctx.etag(), ctx.fileName(), ctx.cnpj(), ctx.referenceDate()
                 ).orElse(null);
 
@@ -85,17 +89,16 @@ public class IngestStockFilesUseCase {
                     fail(ingestionId, ctx.blobPath(), "Pharmacy CNPJ not found in database: " + ctx.cnpj());
                     continue;
                 }
+
                 byte[] bytes = blobPort.download(ctx.blobPath());
                 validator.validate(bytes, ctx.fileName());
-
                 List<StockFileModel> rows = csvParser.parse(bytes, ctx.fileName(), ctx.cnpj(), ctx.referenceDate());
-                List<StockModel> rowsWithCode = rowsMedicationCodeResolver.process(rows);
-                List<StockModel> rowsWithStatus = rowsProcessor.process(rowsWithCode);
+                List<StockModel> stockWithCode = rowsMedicationCodeResolver.process(rows);
+                List<StockModel> stockWithStatus = rowsProcessor.process(stockWithCode);
 
-
+                stockRepo.upsertAll(mapperToEntry(stockWithStatus));
                 succeed(ingestionId, ctx.blobPath());
                 processed++;
-
             } catch (DestinationAlreadyExistsException e) {
                 duplicates++;
                 if (ingestionId != null) {
@@ -205,5 +208,14 @@ public class IngestStockFilesUseCase {
         return "unknown";
     }
 
+    private List<StockEntry> mapperToEntry(List<StockModel> stockModels) {
+        return stockModels.stream()
+                .map(sm -> new StockEntry(
+                        sm.cnpj(),
+                        sm.medicineCode(),
+                        sm.quantity(),
+                        sm.status()
+                )).toList();
+    }
 }
 

@@ -7,15 +7,13 @@ import com.fiap.pharmacypopular.adapter.blob.AzureBlobStorageAdapter;
 import com.fiap.pharmacypopular.adapter.db.IngestionControlAdapter;
 import com.fiap.pharmacypopular.adapter.db.MedicationRepositoryAdapter;
 import com.fiap.pharmacypopular.adapter.db.PharmacyRepositoryAdapter;
+import com.fiap.pharmacypopular.adapter.db.StockRepositoryAdapter;
 import com.fiap.pharmacypopular.aplication.IngestStockFilesUseCase;
 import com.fiap.pharmacypopular.aplication.service.FileStockValidatorService;
 import com.fiap.pharmacypopular.aplication.service.StockFileParserService;
 import com.fiap.pharmacypopular.aplication.service.StockMedicationCodeService;
 import com.fiap.pharmacypopular.aplication.service.StockProcessorStatusService;
-import com.fiap.pharmacypopular.domain.port.BlobStoragePort;
-import com.fiap.pharmacypopular.domain.port.IngestionControlRepositoryPort;
-import com.fiap.pharmacypopular.domain.port.MedicationRepositoryPort;
-import com.fiap.pharmacypopular.domain.port.PharmacyRepositoryPort;
+import com.fiap.pharmacypopular.domain.port.*;
 import com.fiap.pharmacypopular.domain.service.StockStatusCalculator;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -64,22 +62,22 @@ public class AppConfig {
         StockProcessorStatusService rowsProcessor = new StockProcessorStatusService(new StockStatusCalculator());
         MedicationRepositoryPort medicationRepo = new MedicationRepositoryAdapter(ds);
         StockMedicationCodeService rowsMedicationCodeResolver = new StockMedicationCodeService(medicationRepo);
-
+        StockRepositoryPort stockRepo = new StockRepositoryAdapter(ds);
 
         return new IngestStockFilesUseCase(blobPort, minAgeMinutes, validator, pharmacyRepo, ingestionRepo,
-                csvParser, rowsProcessor, rowsMedicationCodeResolver);
+                csvParser, rowsProcessor, rowsMedicationCodeResolver, stockRepo);
     }
 
     private static String env(String key) {
-        String v = System.getenv(key);
-        if (v == null || v.isBlank()) {
+        String env = System.getenv(key);
+        if (env == null || env.isBlank()) {
             throw new IllegalStateException("Missing env var: " + key);
         }
-        return v;
+        return env;
     }
 
     private static String envOr(String key, String def) {
-        String v = System.getenv(key);
-        return (v == null || v.isBlank()) ? def : v;
+        String env = System.getenv(key);
+        return (env == null || env.isBlank()) ? def : env;
     }
 }
