@@ -5,12 +5,18 @@ import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
 import com.fiap.pharmacypopular.adapter.blob.AzureBlobStorageAdapter;
 import com.fiap.pharmacypopular.adapter.db.IngestionControlAdapter;
+import com.fiap.pharmacypopular.adapter.db.MedicationRepositoryAdapter;
 import com.fiap.pharmacypopular.adapter.db.PharmacyRepositoryAdapter;
 import com.fiap.pharmacypopular.aplication.IngestStockFilesUseCase;
-import com.fiap.pharmacypopular.aplication.service.FileStockValidator;
+import com.fiap.pharmacypopular.aplication.service.FileStockValidatorService;
+import com.fiap.pharmacypopular.aplication.service.StockFileParserService;
+import com.fiap.pharmacypopular.aplication.service.StockMedicationCodeService;
+import com.fiap.pharmacypopular.aplication.service.StockProcessorStatusService;
 import com.fiap.pharmacypopular.domain.port.BlobStoragePort;
 import com.fiap.pharmacypopular.domain.port.IngestionControlRepositoryPort;
+import com.fiap.pharmacypopular.domain.port.MedicationRepositoryPort;
 import com.fiap.pharmacypopular.domain.port.PharmacyRepositoryPort;
+import com.fiap.pharmacypopular.domain.service.StockStatusCalculator;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
@@ -50,13 +56,18 @@ public class AppConfig {
 
         BlobContainerClient container = serviceClient.getBlobContainerClient(containerName);
         BlobStoragePort blobPort = new AzureBlobStorageAdapter(container, inboxPrefix, processedPrefix, errorPrefix);
-        FileStockValidator validator = new FileStockValidator();
+        FileStockValidatorService validator = new FileStockValidatorService();
         DataSource ds = buildDataSource();
         PharmacyRepositoryPort pharmacyRepo = new PharmacyRepositoryAdapter(ds);
         IngestionControlRepositoryPort ingestionRepo = new IngestionControlAdapter(ds);
+        StockFileParserService csvParser = new StockFileParserService();
+        StockProcessorStatusService rowsProcessor = new StockProcessorStatusService(new StockStatusCalculator());
+        MedicationRepositoryPort medicationRepo = new MedicationRepositoryAdapter(ds);
+        StockMedicationCodeService rowsMedicationCodeResolver = new StockMedicationCodeService(medicationRepo);
 
 
-        return new IngestStockFilesUseCase(blobPort, minAgeMinutes, validator, pharmacyRepo, ingestionRepo);
+        return new IngestStockFilesUseCase(blobPort, minAgeMinutes, validator, pharmacyRepo, ingestionRepo,
+                csvParser, rowsProcessor, rowsMedicationCodeResolver);
     }
 
     private static String env(String key) {
